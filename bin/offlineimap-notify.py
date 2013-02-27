@@ -3,7 +3,6 @@
 from argparse import ArgumentParser
 from collections import defaultdict
 from contextlib import contextmanager
-#import inspect
 import logging
 import os
 #from os import path
@@ -11,7 +10,7 @@ import re
 import subprocess
 import sys
 
-import offlineimap
+from offlineimap import OfflineImap, ui
 from offlineimap.folder.Maildir import MaildirFolder
 try:
     import pynotify
@@ -25,11 +24,10 @@ except ImportError:
         except OSError:
             logging.error('failed to send notification')
 
-def notify_ui(loglevel):
-    class NotifyUI(offlineimap.ui.UIBase.UIBase):
-        def __init__(self, config, loglevel=loglevel):
-            print('init NotifyUI')
-            super(NotifyUI, self).__init__(config, loglevel)
+def notify_ui(base_ui):
+    class NotifyUI(base_ui):
+        def __init__(self, *args, **kwargs):
+            super(NotifyUI, self).__init__(*args, **kwargs)
             self.newmessages = defaultdict(list)
 
         def copyingmessage(self, uid, num, num_to_copy, src, destfolder):
@@ -58,11 +56,11 @@ def send_notification(new_mails):
     notify(summary, 'body')
 
 def parse_args():
+    # TODO: get default ui by introspection, selecting the one with min(loglevel)
     parser = ArgumentParser(description=__doc__,
                             epilog='''Additional arguments will be passed on to
                                    offlineimap, except for --info.''')
-    parser.add_argument('-u', default=logging.WARNING, dest='loglevel',
-                        choices={'basic': logging.INFO, 'quiet': logging.WARNING},
+    parser.add_argument('-u', default='quiet', choices=ui.UI_LIST.keys(),
                         help='''specify (non-interactive) user interface to use
                              (default: quiet)''')
     parser.add_argument('-n', help='do not send a notification',
@@ -70,7 +68,13 @@ def parse_args():
     # TODO:
     # -n defeats the purpose of using this script, until exitstatus is
     # influenced (and even then it's probably a bit silly)
-    return parser.parse_known_args()
+    args, offlineimap_args = parser.parse_known_args()
+    try:
+        offlineimap_args.remove('--info')
+    except ValueError:
+        pass
+    offlineimap_args.extend(['-u', args.u])
+    return args, offlineimap_args
 
 @contextmanager
 def sys_argv(argv, prog=None):
@@ -80,14 +84,15 @@ def sys_argv(argv, prog=None):
     yield
     sys.argv = argv_old
 
+def modify_ui_list():
+    is_noninteractive = lambda (_, cls): cls.__module__ == ui.Noninteractive.__name__
+    noninteractive_uis = filter(is_noninteractive, ui.UI_LIST.iteritems())
+    ui.UI_LIST.clear()
+    ui.UI_LIST.update({name: notify_ui(cls) for name, cls in noninteractive_uis})
+
 if __name__ == '__main__':
+    modify_ui_list()
     args, offlineimap_args = parse_args()
-    offlineimap.ui.UI_LIST['notify'] = notify_ui(args.loglevel)
-    try:
-        offlineimap_args.remove('--info')
-    except ValueError:
-        pass
-    offlineimap_args.extend(['-u', 'notify'])
     with sys_argv(offlineimap_args, prog='offlineimap'):
-        oi = offlineimap.OfflineImap()
+        oi = OfflineImap()
         oi.run()
