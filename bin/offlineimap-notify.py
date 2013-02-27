@@ -3,6 +3,7 @@
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from collections import defaultdict
 from contextlib import contextmanager
+#import functools
 import inspect
 import logging
 import os
@@ -23,27 +24,24 @@ except ImportError:
         try:
             subprocess.call(['notify-send', '-a', 'OfflineImap', summary, body])
         except OSError:
-            logging.error('failed to send notification')
+            logging.warning('Failed to send notification.')
 
 def notify_ui(base_ui):
     class NotifyUI(base_ui):
-        def __init__(self, *args, **kwargs):
-            super(NotifyUI, self).__init__(*args, **kwargs)
-            self.newmessages = defaultdict(list)
+        def acct(self, account):
+            self.new_messages = defaultdict(list)
+            super(NotifyUI, self).acct(account)
+
+        def acctdone(self, account):
+            send_notification(account.getname(), self.new_messages)
+            del self.new_messages
+            super(NotifyUI, self).acctdone(account)
 
         def copyingmessage(self, uid, num, num_to_copy, src, destfolder):
             if (isinstance(destfolder, MaildirFolder) and
                 'S' not in src.getmessageflags(uid)):
-                # TODO: using folder object as key assumes that:
-                #   f1.name == f2.name => id(f1) == id(f2)
-                self.newmessages[destfolder].append(uid)
+                self.new_messages[destfolder].append(uid)
             super(NotifyUI, self).copyingmessage(uid, num, num_to_copy, src, destfolder)
-
-        def terminate(self, exitstatus=0, errortitle=None, errormsg=None):
-            send_notification(self.newmessages)
-            # TODO: check exceptions, change exitstatus to >0
-            print('exitstatus={}'.format(exitstatus))
-            super(NotifyUI, self).terminate(exitstatus, errortitle, errormsg)
 
     return NotifyUI
 
@@ -61,9 +59,9 @@ def parse_args():
         argspec = inspect.getargspec(ui.UI_LIST[ui_name].__init__)
         defaults = dict(zip(reversed(argspec.args), argspec.defaults or ()))
         try:
-            return int(defaults['loglevel'])
+            return defaults['loglevel']
         except KeyError:
-            return -sys.maxint - 1
+            return logging.NOTSET
 
     parser = ArgumentParser(description=__doc__,
                             formatter_class=ArgumentDefaultsHelpFormatter,
