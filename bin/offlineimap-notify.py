@@ -1,8 +1,9 @@
 #!/usr/bin/python2
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from collections import defaultdict
 from contextlib import contextmanager
+import inspect
 import logging
 import os
 #from os import path
@@ -56,24 +57,32 @@ def send_notification(new_mails):
     notify(summary, 'body')
 
 def parse_args():
-    # TODO: get default ui by introspection, selecting the one with min(loglevel)
+    def getdefaultloglevel(ui_name):
+        argspec = inspect.getargspec(ui.UI_LIST[ui_name].__init__)
+        defaults = dict(zip(reversed(argspec.args), argspec.defaults or ()))
+        try:
+            return int(defaults['loglevel'])
+        except KeyError:
+            return -sys.maxint - 1
+
     parser = ArgumentParser(description=__doc__,
+                            formatter_class=ArgumentDefaultsHelpFormatter,
                             epilog='''Additional arguments will be passed on to
                                    offlineimap, except for --info.''')
-    parser.add_argument('-u', default='quiet', choices=ui.UI_LIST.keys(),
-                        help='''specify (non-interactive) user interface to use
-                             (default: quiet)''')
+    parser.add_argument('-u', default=max(ui.UI_LIST, key=getdefaultloglevel),
+                        choices=ui.UI_LIST.keys(), dest='ui',
+                        help='specify (non-interactive) user interface to use')
     parser.add_argument('-n', help='do not send a notification',
                         dest='notify', action='store_false')
-    # TODO:
-    # -n defeats the purpose of using this script, until exitstatus is
-    # influenced (and even then it's probably a bit silly)
+    # TODO: ^ store_false adds default, which gets formatted by ArgumentDefaultsHelpFormatter
+    # but -n defeats the purpose of using this script, until exitstatus is
+    # influenced and even then it's probably a bit silly
     args, offlineimap_args = parser.parse_known_args()
     try:
         offlineimap_args.remove('--info')
     except ValueError:
         pass
-    offlineimap_args.extend(['-u', args.u])
+    offlineimap_args.extend(['-u', args.ui])
     return args, offlineimap_args
 
 @contextmanager
@@ -84,15 +93,16 @@ def sys_argv(argv, prog=None):
     yield
     sys.argv = argv_old
 
-def modify_ui_list():
+def disable_interactive_uis():
     is_noninteractive = lambda (_, cls): cls.__module__ == ui.Noninteractive.__name__
     noninteractive_uis = filter(is_noninteractive, ui.UI_LIST.iteritems())
     ui.UI_LIST.clear()
-    ui.UI_LIST.update({name: notify_ui(cls) for name, cls in noninteractive_uis})
+    ui.UI_LIST.update(noninteractive_uis)
 
 if __name__ == '__main__':
-    modify_ui_list()
+    disable_interactive_uis()
     args, offlineimap_args = parse_args()
+    ui.UI_LIST[args.ui] = notify_ui(ui.UI_LIST[args.ui])
     with sys_argv(offlineimap_args, prog='offlineimap'):
         oi = OfflineImap()
         oi.run()
