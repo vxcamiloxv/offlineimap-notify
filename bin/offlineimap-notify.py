@@ -3,10 +3,12 @@
 from argparse import ArgumentParser
 from collections import defaultdict
 from contextlib import contextmanager
+from datetime import datetime
+from email.parser import Parser
+from email.utils import parsedate_tz, mktime_tz
 import functools
 import inspect
 import logging
-from mailbox import Message
 import os
 import re
 import subprocess
@@ -59,10 +61,15 @@ def notify(options, new_mails):
         return send_notification(summary, '\n'.join(body))
 
     need_body = '{body' in options.body or '{body' in options.summary
+    parser = Parser()
     for folder, uids in new_mails.iteritems():
         for uid in uids:
-            format_args = {'account': account, 'folder': folder, 'body': None}
-            format_args['hdr'] = message = Message(folder.getmessage(uid))
+            format_args = {'account': account, 'folder': folder}
+            message = parser.parsestr(folder.getmessage(uid),
+                                      headersonly=not need_body)
+            timestamp = mktime_tz(parsedate_tz(message['date']))
+            format_args['h'] = message
+            format_args['date'] = datetime.fromtimestamp(timestamp)
             if need_body:
                 for part in message.walk():
                     if part.get_content_type() == 'text/plain':
@@ -72,10 +79,9 @@ def notify(options, new_mails):
                 send_notification(options.summary.format(**format_args),
                                   options.body.format(**format_args))
             except StandardError:
+                pass
             # TODO: catch KeyError, AttributeError for incorrect format strings
-            # [Edit:] also TypeError and ValueError, or just catch
-            # StandardError?  maybe add something to format date header nicely?
-            # (strftime-like)
+            # and also TypeError and ValueError, or just catch StandardError?
 
 def parse_args():
     def getdefaultloglevel(ui_name):
@@ -113,8 +119,7 @@ def parse_args():
 @contextmanager
 def sys_argv(argv, prog=None):
     argv_old = sys.argv
-    sys.argv = argv[:]
-    sys.argv.insert(0, prog or argv_old[0])
+    sys.argv = [argv_old[0] if prog is None else prog] + argv
     yield
     sys.argv = argv_old
 
