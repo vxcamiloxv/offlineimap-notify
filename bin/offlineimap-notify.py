@@ -8,7 +8,7 @@ reported using D-Bus (through pynotify) or a fallback notifier command.
 
 from __future__ import print_function
 
-import collections
+from collections import defaultdict, OrderedDict, namedtuple
 import ConfigParser
 from datetime import datetime
 import email.parser
@@ -30,17 +30,17 @@ except ImportError:
 __author__ = 'Raymond Wagenmaker'
 __copyright__ = 'Copyright 2013 ' + __author__
 
-OptSpec = collections.namedtuple('OptSpec', ('descr', 'default'))
+OptSpec = namedtuple('OptSpec', ('descr', 'default'))
 CONFIG_SECTION = 'notifications'
-CONFIG_DEFAULTS = collections.OrderedDict((  # TODO: add options for formatting single notification when exceeding max
+CONFIG_DEFAULTS = OrderedDict((  # TODO: add options for formatting single notification when exceeding max
     ('summary',  OptSpec(default='New mail for {account} in {folder}',
                          descr='format for notification summary')),
-    ('body',     OptSpec(default='From: {hdr[from]}\nSubject: {hdr[subject]}',
+    ('body',     OptSpec(default='From: {h[from]}\nSubject: {h[subject]}',
                          descr='format for notification body')),
     ('max',      OptSpec(default=2,
-                         descr="""maximum number of notifications; when an
-                               account has more new messages, send one summary
-                               notification""")),
+                         descr='maximum number of notifications; when an '
+                               'account has more new messages, send one '
+                               'summary notification')),
     ('notifier', OptSpec(default="notify-send -a {appname} '{summary}' '{body}'",
                          descr='fallback command for notifications'))
 ))
@@ -76,46 +76,52 @@ def add_notifications(ui_cls):
         return new
 
     @extend
+    def __init__(self, *args, **kwargs):
+        self.local_repo_names = {}
+        self.new_messages = defaultdict(lambda: defaultdict(list))
+
+    @extend
     def acct(self, account):
-        self.new_messages = collections.defaultdict(list)
+        self.local_repo_names[account] = account.localrepos.getname()
 
     @extend
     def acctdone(self, account):
-        if self.new_messages:
-            notify(self)
-        del self.new_messages
+        if self.new_messages[account]:
+            notify(self, account)
+            self.new_messages[account].clear()
 
     @extend
     def copyingmessage(self, uid, num, num_to_copy, src, destfolder):
-        if (destfolder.getrepository().getname() == 'local' and
+        repository = destfolder.getrepository()
+        account = repository.getaccount()
+        if (repository.getname() == self.local_repo_names[account] and
             'S' not in src.getmessageflags(uid)):
-            self.new_messages[destfolder].append(uid)
+            self.new_messages[account][destfolder].append(uid)
 
     return ui_cls
 
-def notify(ui):
+def notify(ui, account):
     conf = {opt: spec.default for opt, spec in CONFIG_DEFAULTS.iteritems()}
     try:
         conf.update(ui.config.items(CONFIG_SECTION))
     except ConfigParser.NoSectionError:
         pass
-    send_notification = functools.partial(send_notification, ui,
-                                          fallback_cmd=conf['notifier'])
+    notify_send = functools.partial(send_notification, ui,
+                                    fallback_cmd=conf['notifier'])
     count = 0
     body = []
-    for folder, uids in ui.new_messages.iteritems():
+    for folder, uids in ui.new_messages[account].iteritems():
         count += len(uids)
         body.append('{} in {}'.format(len(uids), folder))
-    account = folder.accountname()
 
     if count > conf['max']:
-        summary = 'New mail for {} ({})'.format(account, count)
-        return send_notification(summary, '\n'.join(body))
+        summary = 'New mail for {} ({})'.format(account.getname(), count)
+        return notify_send(summary, '\n'.join(body))
 
-    need_body = '{body' in options.body or '{body' in options.summary
+    need_body = '{body' in conf['body'] or '{body' in conf['summary']
     parser = email.parser.Parser()
-    for folder, uids in ui.new_messages.iteritems():
-        format_args = {'account': account, 'folder': folder}
+    for folder, uids in ui.new_messages[account].iteritems():
+        format_args = {'account': account.getname(), 'folder': folder}
         for uid in uids:
             message = parser.parsestr(folder.getmessage(uid),
                                       headersonly=not need_body)
@@ -131,8 +137,8 @@ def notify(ui):
                 else:
                     format_args['body'] = 'FIXME'
             try:
-                send_notification(conf['summary'].format(**format_args),
-                                  conf['body'].format(**format_args))
+                notify_send(conf['summary'].format(**format_args),
+                            conf['body'].format(**format_args))
             except (AttributeError, KeyError, TypeError, ValueError) as e:
                 ui.error(e, msg='While formatting notification')
 
@@ -142,26 +148,29 @@ def decorate_uis(uis):
 
 def print_help():
     try:
-        text_width = os.environ['COLUMNS']
+        text_width = int(os.environ['COLUMNS'])
     except (KeyError, ValueError):
         text_width = 80
     tw = textwrap.TextWrapper(width=text_width)
 
     paragraphs = ('Notification wrapper -- ' + __copyright__, __doc__,
-                  """The following options can be specified in a [{}] section
-                  in '~/.offlineimaprc (and overridden using the -k option on
-                  the command line).""".format(CONFIG_SECTION))
+                  'The following options can be specified in a [{}] section '
+                  'in ~/.offlineimaprc (and overridden using the -k option on '
+                  'the command line).'.format(CONFIG_SECTION))
     print('\n\n'.join(tw.fill(par) for par in paragraphs))
 
     indent = column_sep = '  '
     option_width = max(len(option) for option in CONFIG_DEFAULTS)
     for option, spec in CONFIG_DEFAULTS.iteritems():
-        tw.initial_indent = (option_width - len(option)) * ' ' + column_sep
+        tw.initial_indent = indent + option.ljust(option_width) + column_sep
         tw.subsequent_indent = indent + option_width * ' ' + column_sep
-        print(indent, option, tw.fill(spec.descr), sep='')
+        print(tw.fill(spec.descr))
         tw.initial_indent = tw.subsequent_indent
-        print(tw.fill('(default: {!r})'.format(spec.default)))
-    print()
+        print(*(tw.fill(line)
+                for line in '(default: {})'.format(spec.default).splitlines()),
+              sep='\n')
+    # TODO: explain format strings
+    print('\n')
 
 if __name__ == '__main__':
     decorate_uis(offlineimap.ui.UI_LIST)
