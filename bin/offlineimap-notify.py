@@ -1,8 +1,12 @@
 #!/usr/bin/python2
 
+"""Run OfflineImap and send notifications for new mail.
+
+When an account is finished, messages synced to the local repository are
+reported using D-Bus (through pynotify) or a fallback notifier command.
 """
-poep
-"""
+
+from __future__ import print_function
 
 import collections
 import ConfigParser
@@ -15,6 +19,7 @@ import os
 import shlex
 import subprocess
 import sys
+import textwrap
 
 import offlineimap
 try:
@@ -22,13 +27,23 @@ try:
 except ImportError:
     pass
 
+__author__ = 'Raymond Wagenmaker'
+__copyright__ = 'Copyright 2013 ' + __author__
+
+OptSpec = collections.namedtuple('OptSpec', ('descr', 'default'))
 CONFIG_SECTION = 'notifications'
-CONFIG_DEFAULTS = {  # TODO: add options for formatting single notification when exceeding max
-    'summary':  '',
-    'body':     '',
-    'max':      2,
-    'notifier': "notify-send -a {appname} '{summary}' '{body}'"
-}
+CONFIG_DEFAULTS = collections.OrderedDict((  # TODO: add options for formatting single notification when exceeding max
+    ('summary',  OptSpec(default='New mail for {account} in {folder}',
+                         descr='format for notification summary')),
+    ('body',     OptSpec(default='From: {hdr[from]}\nSubject: {hdr[subject]}',
+                         descr='format for notification body')),
+    ('max',      OptSpec(default=2,
+                         descr="""maximum number of notifications; when an
+                               account has more new messages, send one summary
+                               notification""")),
+    ('notifier', OptSpec(default="notify-send -a {appname} '{summary}' '{body}'",
+                         descr='fallback command for notifications'))
+))
 
 def send_notification(ui, summary, body, fallback_cmd):
     appname = os.path.basename(sys.argv[0])
@@ -47,7 +62,6 @@ def send_notification(ui, summary, body, fallback_cmd):
 def add_notifications(ui_cls):
 
     def extend(extender):
-
         old = getattr(ui_cls, extender.__name__)
         uibase_spec = inspect.getargspec(getattr(offlineimap.ui.UIBase.UIBase,
                                                  extender.__name__))
@@ -80,7 +94,7 @@ def add_notifications(ui_cls):
     return ui_cls
 
 def notify(ui):
-    conf = CONFIG_DEFAULTS.copy()
+    conf = {opt: spec.default for opt, spec in CONFIG_DEFAULTS.iteritems()}
     try:
         conf.update(ui.config.items(CONFIG_SECTION))
     except ConfigParser.NoSectionError:
@@ -127,8 +141,27 @@ def decorate_uis(uis):
         uis[name] = add_notifications(cls)
 
 def print_help():
-    # TODO: add __copyright__ and __author__ (e.g., 'Notification wrapper (c) {author})
-    print(__doc__.strip())
+    try:
+        text_width = os.environ['COLUMNS']
+    except (KeyError, ValueError):
+        text_width = 80
+    tw = textwrap.TextWrapper(width=text_width)
+
+    paragraphs = ('Notification wrapper -- ' + __copyright__, __doc__,
+                  """The following options can be specified in a [{}] section
+                  in '~/.offlineimaprc (and overridden using the -k option on
+                  the command line).""".format(CONFIG_SECTION))
+    print('\n\n'.join(tw.fill(par) for par in paragraphs))
+
+    indent = column_sep = '  '
+    option_width = max(len(option) for option in CONFIG_DEFAULTS)
+    for option, spec in CONFIG_DEFAULTS.iteritems():
+        tw.initial_indent = (option_width - len(option)) * ' ' + column_sep
+        tw.subsequent_indent = indent + option_width * ' ' + column_sep
+        print(indent, option, tw.fill(spec.descr), sep='')
+        tw.initial_indent = tw.subsequent_indent
+        print(tw.fill('(default: {!r})'.format(spec.default)))
+    print()
 
 if __name__ == '__main__':
     decorate_uis(offlineimap.ui.UI_LIST)
