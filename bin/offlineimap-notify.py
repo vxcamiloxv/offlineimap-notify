@@ -8,6 +8,7 @@ reported using D-Bus (through pynotify) or a fallback notifier command.
 
 from __future__ import print_function
 
+import cgi
 from collections import defaultdict, OrderedDict, namedtuple
 import ConfigParser
 from datetime import datetime
@@ -32,28 +33,39 @@ __copyright__ = 'Copyright 2013 ' + __author__
 
 OptSpec = namedtuple('OptSpec', ('descr', 'default'))
 CONFIG_SECTION = 'notifications'
-CONFIG_DEFAULTS = OrderedDict((  # TODO: add options for formatting single notification when exceeding max
-    ('summary',  OptSpec(default='New mail for {account} in {folder}',
-                         descr='format for notification summary')),
-    ('body',     OptSpec(default='From: {h[from]}\nSubject: {h[subject]}',
-                         descr='format for notification body')),
-    ('max',      OptSpec(default=2,
-                         descr='maximum number of notifications; when an '
-                               'account has more new messages, send one '
-                               'summary notification')),
-    ('notifier', OptSpec(default="notify-send -a {appname} '{summary}' '{body}'",
-                         descr='fallback command for notifications'))
+CONFIG_DEFAULTS = OrderedDict((
+    ('summary',        OptSpec(default='New mail for {account} in {folder}',
+                               descr='format for notification summary')),
+    ('body',           OptSpec(default='From: {h[from]}\nSubject: {h[subject]}',
+                               descr='format for notification body')),
+    ('icon',           OptSpec(default='mail-unread',
+                               descr='notification icon')),
+    ('max',            OptSpec(default=2,
+                               descr='maximum number of notifications; when an '
+                                     'account has more new messages, send a '
+                                     'single digest notification')),
+    ('digest-summary', OptSpec(default='New mail for {account} ({count})',
+                               descr='summary for digest notification')),
+    ('digest-body',    OptSpec(default='{count} in {folder}',
+                               descr='body for digest notification; this line '
+                                     'is repeated for each folder')),
+    ('notifier',       OptSpec(default='notify-send -a {appname} -i {icon}',
+                               descr='fallback command for notifications; '
+                                     'notification summary and body will be '
+                                     'passed as additional arguments'))
 ))
 
-def send_notification(ui, summary, body, fallback_cmd):
+def send_notification(ui, conf, summary, body):
+    # FIXME: escaping entire body makes it impossible to use markup in format spec
+    body = cgi.escape(body, quote=True)
     appname = os.path.basename(sys.argv[0])
     try:
         pynotify.init(appname)
-        pynotify.Notification(summary, body).show()
+        pynotify.Notification(summary, body, conf['icon']).show()
     except (NameError, RuntimeError):  # no pynotify or no notification service
-        format_args = {'appname': appname, 'summary': summary, 'body': body}
         try:
-            subprocess.call(shlex.split(fallback_cmd.format(format_args)))
+            notifier = conf['notifier'].format(appname=appname, icon=conf['icon'])
+            subprocess.call(shlex.split(notifier) + [summary, body])
         except ValueError as e:
             ui.error(e, msg='While parsing fallback notifier command')
         except OSError as e:
@@ -61,19 +73,18 @@ def send_notification(ui, summary, body, fallback_cmd):
 
 def add_notifications(ui_cls):
 
-    def extend(extender):
-        old = getattr(ui_cls, extender.__name__)
+    def extend(extension):
+        old = getattr(ui_cls, extension.__name__)
         uibase_spec = inspect.getargspec(getattr(offlineimap.ui.UIBase.UIBase,
-                                                 extender.__name__))
+                                                 extension.__name__))
 
         @functools.wraps(old)
         def new(*args, **kwargs):
             old_args = inspect.getcallargs(old, *args, **kwargs)
-            extender(**{arg: old_args[arg] for arg in uibase_spec.args})
+            extension(**{arg: old_args[arg] for arg in uibase_spec.args})
             old(*args, **kwargs)
 
-        setattr(ui_cls, extender.__name__, new)
-        return new
+        setattr(ui_cls, extension.__name__, new)
 
     @extend
     def __init__(self, *args, **kwargs):
@@ -106,16 +117,16 @@ def notify(ui, account):
         conf.update(ui.config.items(CONFIG_SECTION))
     except ConfigParser.NoSectionError:
         pass
-    notify_send = functools.partial(send_notification, ui,
-                                    fallback_cmd=conf['notifier'])
+    notify_send = functools.partial(send_notification, ui, conf)
     count = 0
     body = []
     for folder, uids in ui.new_messages[account].iteritems():
         count += len(uids)
-        body.append('{} in {}'.format(len(uids), folder))
+        body.append(conf['digest-body'].format(count=len(uids), folder=folder))
 
-    if count > conf['max']:
-        summary = 'New mail for {} ({})'.format(account.getname(), count)
+    if count > int(conf['max']):
+        summary = conf['digest-summary'].format(account=account.getname(),
+                                                count=count)
         return notify_send(summary, '\n'.join(body))
 
     need_body = '{body' in conf['body'] or '{body' in conf['summary']
@@ -133,7 +144,7 @@ def notify(ui, account):
             if need_body:
                 for part in message.walk():
                     if part.get_content_type() == 'text/plain':
-                        format_args['body'] = part  # FIME: need to .get_payload(decode=True),
+                        format_args['body'] = part  # FIXME: need to .get_payload(decode=True),
                         # but should study multipart handling more too
                         break
                 else:
@@ -142,11 +153,7 @@ def notify(ui, account):
                 notify_send(conf['summary'].format(**format_args),
                             conf['body'].format(**format_args))
             except (AttributeError, KeyError, TypeError, ValueError) as e:
-                ui.error(e, msg='While formatting notification')
-
-def decorate_uis(uis):
-    for name, cls in uis.iteritems():
-        uis[name] = add_notifications(cls)
+                ui.error(e, msg='In notification format specification')
 
 def print_help():
     try:
@@ -155,27 +162,39 @@ def print_help():
         text_width = 80
     tw = textwrap.TextWrapper(width=text_width)
 
-    paragraphs = ('Notification wrapper -- ' + __copyright__, __doc__,
-                  'The following options can be specified in a [{}] section '
-                  'in ~/.offlineimaprc (and overridden using the -k option on '
-                  'the command line).'.format(CONFIG_SECTION))
-    print('\n\n'.join(tw.fill(par) for par in paragraphs))
+    paragraphs = ('Notification wrapper -- ' + __copyright__,
+                  __doc__,
+                  ('The following options can be specified in a [{}] section '
+                   'in ~/.offlineimaprc (and overridden using the -k option on '
+                   'the command line).'.format(CONFIG_SECTION)))
+    print('\n\n'.join(map(tw.fill, paragraphs)))
 
     indent = column_sep = '  '
-    option_width = max(len(option) for option in CONFIG_DEFAULTS)
+    option_width = max(map(len, CONFIG_DEFAULTS))
     for option, spec in CONFIG_DEFAULTS.iteritems():
         tw.initial_indent = indent + option.ljust(option_width) + column_sep
         tw.subsequent_indent = indent + option_width * ' ' + column_sep
         print(tw.fill(spec.descr))
         tw.initial_indent = tw.subsequent_indent
-        print(*(tw.fill(line)
-                for line in '(default: {})'.format(spec.default).splitlines()),
+        print(*map(tw.fill, '(default: {})'.format(spec.default).splitlines()),
               sep='\n')
-    # TODO: explain format strings
-    print('\n')
+    print()
+
+    tw.initial_indent = tw.subsequent_indent = ''
+    paragraphs = ("The {var} notation in format specifications is used by "
+                  "Python's str.format() for replacement fields. The defaults "
+                  "show most of the available fields for all options except "
+                  "body and summary.",)
+    print('\n\n'.join(map(tw.fill, paragraphs)))
+    # TODO: ^ extend description once the formatting stuff stabilizes
 
 if __name__ == '__main__':
-    decorate_uis(offlineimap.ui.UI_LIST)
-    if '-h' in sys.argv or '--help' in sys.argv:
-        print_help()
-    offlineimap.OfflineImap().run()
+    for name, cls in offlineimap.ui.UI_LIST.iteritems():
+        offlineimap.ui.UI_LIST[name] = add_notifications(cls)
+    try:
+        offlineimap.OfflineImap().run()
+    except SystemExit:
+        if '-h' in sys.argv or '--help' in sys.argv:
+            print('\n')
+            print_help()
+        raise
