@@ -12,7 +12,7 @@ from collections import defaultdict, OrderedDict, namedtuple
 import ConfigParser
 from datetime import datetime
 import email.parser
-from email.utils import parsedate_tz, mktime_tz
+from email.utils import parseaddr, parsedate_tz, mktime_tz
 import functools
 import inspect
 import os
@@ -50,7 +50,7 @@ def send_notification(ui, summary, body, fallback_cmd):
     try:
         pynotify.init(appname)
         pynotify.Notification(summary, body).show()
-    except NameError, RuntimeError:  # no pynotify or no notification service
+    except (NameError, RuntimeError):  # no pynotify or no notification service
         format_args = {'appname': appname, 'summary': summary, 'body': body}
         try:
             subprocess.call(shlex.split(fallback_cmd.format(format_args)))
@@ -126,7 +126,9 @@ def notify(ui, account):
             message = parser.parsestr(folder.getmessage(uid),
                                       headersonly=not need_body)
             timestamp = mktime_tz(parsedate_tz(message['date']))
+            realname, _ = parseaddr(message['from'])
             format_args['h'] = message
+            format_args['from'] = realname or message['from']
             format_args['date'] = datetime.fromtimestamp(timestamp)
             if need_body:
                 for part in message.walk():
