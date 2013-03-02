@@ -17,7 +17,6 @@ import subprocess
 import sys
 
 import offlineimap
-from offlineimap.folder.Maildir import MaildirFolder
 try:
     import pynotify
 except ImportError:
@@ -40,6 +39,8 @@ def send_notification(ui, summary, body, fallback_cmd):
         format_args = {'appname': appname, 'summary': summary, 'body': body}
         try:
             subprocess.call(shlex.split(fallback_cmd.format(format_args)))
+        except ValueError as e:
+            ui.error(e, msg='While parsing fallback notifier command')
         except OSError as e:
             ui.error(e, msg='While calling fallback notifier')
 
@@ -72,7 +73,7 @@ def add_notifications(ui_cls):
 
     @extend
     def copyingmessage(self, uid, num, num_to_copy, src, destfolder):
-        if (isinstance(destfolder, MaildirFolder) and
+        if (destfolder.getrepository().getname() == 'local' and
             'S' not in src.getmessageflags(uid)):
             self.new_messages[destfolder].append(uid)
 
