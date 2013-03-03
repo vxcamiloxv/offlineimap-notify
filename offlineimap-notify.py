@@ -6,8 +6,6 @@ When an account is finished, messages synced to the local repository are
 reported using D-Bus (through pynotify) or a fallback notifier command.
 """
 
-from __future__ import print_function
-
 import cgi
 from collections import defaultdict, OrderedDict, namedtuple
 import ConfigParser
@@ -20,7 +18,6 @@ import os
 import shlex
 import subprocess
 import sys
-import textwrap
 
 import offlineimap
 try:
@@ -31,28 +28,15 @@ except ImportError:
 __author__ = 'Raymond Wagenmaker'
 __copyright__ = 'Copyright 2013 ' + __author__
 
-OptSpec = namedtuple('OptSpec', ('descr', 'default'))
 CONFIG_SECTION = 'notifications'
 CONFIG_DEFAULTS = OrderedDict((
-    ('summary',        OptSpec(default='New mail for {account} in {folder}',
-                               descr='format for notification summary')),
-    ('body',           OptSpec(default='From: {h[from]}\nSubject: {h[subject]}',
-                               descr='format for notification body')),
-    ('icon',           OptSpec(default='mail-unread',
-                               descr='notification icon')),
-    ('max',            OptSpec(default=2,
-                               descr='maximum number of notifications; when an '
-                                     'account has more new messages, send a '
-                                     'single digest notification')),
-    ('digest-summary', OptSpec(default='New mail for {account} ({count})',
-                               descr='summary for digest notification')),
-    ('digest-body',    OptSpec(default='{count} in {folder}',
-                               descr='body for digest notification; this line '
-                                     'is repeated for each folder')),
-    ('notifier',       OptSpec(default='notify-send -a {appname} -i {icon}',
-                               descr='fallback command for notifications; '
-                                     'notification summary and body will be '
-                                     'passed as additional arguments'))
+    ('summary',        'New mail for {account} in {folder}'),
+    ('body',           'From: {h[from]}\nSubject: {h[subject]}'),
+    ('icon',           'mail-unread'),
+    ('max',            '2'),
+    ('digest-summary', 'New mail for {account} ({count})'),
+    ('digest-body',    '{count} in {folder}'),
+    ('notifier',       'notify-send -a {appname} -i {icon}'),
 ))
 
 def send_notification(ui, conf, summary, body):
@@ -112,7 +96,7 @@ def add_notifications(ui_cls):
     return ui_cls
 
 def notify(ui, account):
-    conf = {opt: spec.default for opt, spec in CONFIG_DEFAULTS.iteritems()}
+    conf = CONFIG_DEFAULTS.copy()
     try:
         conf.update(ui.config.items(CONFIG_SECTION))
     except ConfigParser.NoSectionError:
@@ -156,37 +140,13 @@ def notify(ui, account):
                 ui.error(e, msg='In notification format specification')
 
 def print_help():
-    try:
-        text_width = int(os.environ['COLUMNS'])
-    except (KeyError, ValueError):
-        text_width = 80
-    tw = textwrap.TextWrapper(width=text_width)
-
-    paragraphs = ('Notification wrapper -- ' + __copyright__,
-                  __doc__,
-                  ('The following options can be specified in a [{}] section '
-                   'in ~/.offlineimaprc (and overridden using the -k option on '
-                   'the command line).'.format(CONFIG_SECTION)))
-    print('\n\n'.join(map(tw.fill, paragraphs)))
-
-    indent = column_sep = '  '
-    option_width = max(map(len, CONFIG_DEFAULTS))
-    for option, spec in CONFIG_DEFAULTS.iteritems():
-        tw.initial_indent = indent + option.ljust(option_width) + column_sep
-        tw.subsequent_indent = indent + option_width * ' ' + column_sep
-        print(tw.fill(spec.descr))
-        tw.initial_indent = tw.subsequent_indent
-        print(*map(tw.fill, '(default: {})'.format(spec.default).splitlines()),
-              sep='\n')
-    print()
-
-    tw.initial_indent = tw.subsequent_indent = ''
-    paragraphs = ("The {var} notation in format specifications is used by "
-                  "Python's str.format() for replacement fields. The defaults "
-                  "show most of the available fields for all options except "
-                  "body and summary.",)
-    print('\n\n'.join(map(tw.fill, paragraphs)))
-    # TODO: ^ extend description once the formatting stuff stabilizes
+    print('Notification wrapper -- ' + __copyright__)
+    print('\nDefault configuration:\n')
+    default_config = offlineimap.CustomConfig.CustomConfigParser()
+    default_config.add_section(CONFIG_SECTION)
+    for option, value in CONFIG_DEFAULTS.iteritems():
+        default_config.set(CONFIG_SECTION, option, value)
+    default_config.write(sys.stdout)
 
 if __name__ == '__main__':
     for name, cls in offlineimap.ui.UI_LIST.iteritems():
