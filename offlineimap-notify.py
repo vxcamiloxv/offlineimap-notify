@@ -50,20 +50,20 @@ CONFIG_DEFAULTS = OrderedDict((
     ('max',            '2'),
     ('digest-summary', 'New mail for {account} ({count})'),
     ('digest-body',    '{count} in {folder}'),
-    ('notifier',       'notify-send -a {appname} -i {icon}'),
+    ('notifier',       'notify-send -a {appname} -i {icon} {summary} {body}'),
 ))
 
 def send_notification(ui, conf, summary, body):
-    # FIXME: escaping entire body makes it impossible to use markup in format spec
-    body = cgi.escape(body, quote=True)
     appname = os.path.basename(sys.argv[0])
     try:
         pynotify.init(appname)
         pynotify.Notification(summary, body, conf['icon']).show()
     except (NameError, RuntimeError):  # no pynotify or no notification service
         try:
-            notifier = conf['notifier'].format(appname=appname, icon=conf['icon'])
-            subprocess.call(shlex.split(notifier) + [summary, body])
+            format_args = {'appname': appname, 'icon': conf['icon'],
+                           'summary': summary, 'body': body}
+            subprocess.call([word.format(**format_args)
+                             for word in shlex.split(conf['notifier'])])
         except ValueError as e:
             ui.error(e, msg='While parsing fallback notifier command')
         except OSError as e:
@@ -139,6 +139,7 @@ def notify(ui, account):
             format_args['h'] = message
             format_args['from'] = realname or message['from']
             format_args['date'] = datetime.fromtimestamp(timestamp)
+            # TODO: extend format_args, use cgi_escape for args in conf['body']
             if need_body:
                 for part in message.walk():
                     if part.get_content_type() == 'text/plain':
