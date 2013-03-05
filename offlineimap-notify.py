@@ -111,17 +111,21 @@ def add_notifications(ui_cls):
 
     return ui_cls
 
-class NotificationFormatter(string.Formatter):
+class MailNotificationFormatter(string.Formatter):
     _FAILED_DATE_CONVERSION = object()
+
+    # TODO:
+    # - decode headers?
+    # - how are missing headers handled?
 
     def __init__(self, escape=False):
         self.escape = escape
 
     def format_field(self, value, format_spec):
         try:
-            result = super(NotificationFormatter, self).format_field(value, format_spec)
+            result = super(MailNotificationFormatter, self).format_field(value, format_spec)
         except ValueError:
-            if value is NotificationFormatter._FAILED_DATE_CONVERSION:
+            if value is MailNotificationFormatter._FAILED_DATE_CONVERSION:
                 result = ''  # TODO: add config option to customize this string?
             else:
                 raise
@@ -131,7 +135,7 @@ class NotificationFormatter(string.Formatter):
         if conversion == 'd':
             datetuple = email.utils.parsedate_tz(value)
             if datetuple is None:
-                return NotificationFormatter._FAILED_DATE_CONVERSION
+                return MailNotificationFormatter._FAILED_DATE_CONVERSION
             return datetime.fromtimestamp(email.utils.mktime_tz(datetuple))
         elif conversion in 'anN':
             name, address = email.utils.parseaddr(value)
@@ -140,11 +144,11 @@ class NotificationFormatter(string.Formatter):
             if conversion == 'a':
                 return address
             return name if name or conversion == 'n' else address
-        return super(NotificationFormatter, self).convert_field(value, conversion)
+        return super(MailNotificationFormatter, self).convert_field(value, conversion)
 
 def notify(ui, account):
-    summary_formatter = NotificationFormatter(escape=False)
-    body_formatter = NotificationFormatter(escape=True)
+    summary_formatter = MailNotificationFormatter(escape=False)
+    body_formatter = MailNotificationFormatter(escape=True)
 
     conf = CONFIG_DEFAULTS.copy()
     try:
@@ -158,7 +162,7 @@ def notify(ui, account):
     for folder, uids in ui.new_messages[account].iteritems():
         count += len(uids)
         body.append(body_formatter.format(conf['digest-body'],
-                                          count=len(uids), folder=folder)
+                                          count=len(uids), folder=folder))
 
     if count > int(conf['max']):
         summary = summary_formatter.format(conf['digest-summary'],
@@ -180,7 +184,7 @@ def notify(ui, account):
                         # but should study multipart handling more too
                         break
                 else:
-                    format_args['body'] = 'FIXME'
+                    format_args['body'] = 'FIXME'  # try HTML body.striptags() or same failstr as for date conversion?
             try:
                 notify_send(summary_formatter.vformat(conf['summary'], (), format_args),
                             body_formatter.vformat(conf['body'], (), format_args))
