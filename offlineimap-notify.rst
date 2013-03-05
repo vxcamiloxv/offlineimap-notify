@@ -2,11 +2,12 @@
 offlineimap-notify
 ==================
 
----------------------------------------------
-notification wrapper/shell around OfflineIMAP
----------------------------------------------
+-----------------------------------------------------
+wrapper that adds notification sending to OfflineIMAP
+-----------------------------------------------------
 
-:Author: Raymond Wagenmaker
+:Author: Raymond Wagenmaker <raymondwagenmaker@gmail.com>
+:Date: March 2013
 :Manual section: 1
 
 Synopsis
@@ -17,7 +18,9 @@ offlineimap-notify [*option*] ...
 Description
 ===========
 
-.. TODO
+Run OfflineIMAP after adding notification sending to its UIs. When an account
+finishes syncing, messages synced to the local repository will be reported
+using D-Bus (through pynotify) or a fallback notifier command.
 
 Options
 =======
@@ -52,8 +55,9 @@ digest-body
     body for digest notification; this line is repeated for each folder
 
 notifier
-    fallback command for notifications; notification summary and body will be
-    passed as additional arguments
+    fallback command for notifications
+
+.. TODO: format specification, replacement fields
 
 See also
 ========

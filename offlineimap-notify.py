@@ -14,24 +14,26 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Run OfflineImap and send notifications for new mail.
+"""Run OfflineIMAP after adding notification sending to its UIs.
 
-When an account is finished, messages synced to the local repository are
-reported using D-Bus (through pynotify) or a fallback notifier command.
+When an account finishes syncing, messages synced to the local repository will
+be reported using D-Bus (through pynotify) or a fallback notifier command.
 """
 
 import cgi
-from collections import defaultdict, OrderedDict, namedtuple
+from collections import defaultdict, OrderedDict
 import ConfigParser
 from datetime import datetime
 import email.parser
-from email.utils import parseaddr, parsedate_tz, mktime_tz
+import email.utils
 import functools
 import inspect
 import os
 import shlex
+import string
 import subprocess
 import sys
+import textwrap
 
 import offlineimap
 try:
@@ -54,7 +56,7 @@ CONFIG_DEFAULTS = OrderedDict((
 ))
 
 def send_notification(ui, conf, summary, body):
-    appname = os.path.basename(sys.argv[0])
+    appname = 'OfflineIMAP'
     try:
         pynotify.init(appname)
         pynotify.Notification(summary, body, conf['icon']).show()
@@ -71,35 +73,35 @@ def send_notification(ui, conf, summary, body):
 
 def add_notifications(ui_cls):
 
-    def extend(extension):
-        old = getattr(ui_cls, extension.__name__)
+    def extension(method):
+        old = getattr(ui_cls, method.__name__)
         uibase_spec = inspect.getargspec(getattr(offlineimap.ui.UIBase.UIBase,
-                                                 extension.__name__))
+                                                 method.__name__))
 
         @functools.wraps(old)
         def new(*args, **kwargs):
             old_args = inspect.getcallargs(old, *args, **kwargs)
-            extension(**{arg: old_args[arg] for arg in uibase_spec.args})
+            method(**{arg: old_args[arg] for arg in uibase_spec.args})
             old(*args, **kwargs)
 
-        setattr(ui_cls, extension.__name__, new)
+        setattr(ui_cls, method.__name__, new)
 
-    @extend
+    @extension
     def __init__(self, *args, **kwargs):
         self.local_repo_names = {}
         self.new_messages = defaultdict(lambda: defaultdict(list))
 
-    @extend
+    @extension
     def acct(self, account):
         self.local_repo_names[account] = account.localrepos.getname()
 
-    @extend
+    @extension
     def acctdone(self, account):
         if self.new_messages[account]:
             notify(self, account)
             self.new_messages[account].clear()
 
-    @extend
+    @extension
     def copyingmessage(self, uid, num, num_to_copy, src, destfolder):
         repository = destfolder.getrepository()
         account = repository.getaccount()
@@ -109,22 +111,58 @@ def add_notifications(ui_cls):
 
     return ui_cls
 
+class NotificationFormatter(string.Formatter):
+    _FAILED_DATE_CONVERSION = object()
+
+    def __init__(self, escape=False):
+        self.escape = escape
+
+    def format_field(self, value, format_spec):
+        try:
+            result = super(NotificationFormatter, self).format_field(value, format_spec)
+        except ValueError:
+            if value is NotificationFormatter._FAILED_DATE_CONVERSION:
+                result = ''  # TODO: add config option to customize this string?
+            else:
+                raise
+        return cgi.escape(result, quote=True) if self.escape else result
+
+    def convert_field(self, value, conversion):
+        if conversion == 'd':
+            datetuple = email.utils.parsedate_tz(value)
+            if datetuple is None:
+                return NotificationFormatter._FAILED_DATE_CONVERSION
+            return datetime.fromtimestamp(email.utils.mktime_tz(datetuple))
+        elif conversion in 'anN':
+            name, address = email.utils.parseaddr(value)
+            if not address:
+                address = value
+            if conversion == 'a':
+                return address
+            return name if name or conversion == 'n' else address
+        return super(NotificationFormatter, self).convert_field(value, conversion)
+
 def notify(ui, account):
+    summary_formatter = NotificationFormatter(escape=False)
+    body_formatter = NotificationFormatter(escape=True)
+
     conf = CONFIG_DEFAULTS.copy()
     try:
         conf.update(ui.config.items(CONFIG_SECTION))
     except ConfigParser.NoSectionError:
         pass
     notify_send = functools.partial(send_notification, ui, conf)
+
     count = 0
     body = []
     for folder, uids in ui.new_messages[account].iteritems():
         count += len(uids)
-        body.append(conf['digest-body'].format(count=len(uids), folder=folder))
+        body.append(body_formatter.format(conf['digest-body'],
+                                          count=len(uids), folder=folder)
 
     if count > int(conf['max']):
-        summary = conf['digest-summary'].format(account=account.getname(),
-                                                count=count)
+        summary = summary_formatter.format(conf['digest-summary'],
+                                           account=account.getname(), count=count)
         return notify_send(summary, '\n'.join(body))
 
     need_body = '{body' in conf['body'] or '{body' in conf['summary']
@@ -134,12 +172,7 @@ def notify(ui, account):
         for uid in uids:
             message = parser.parsestr(folder.getmessage(uid),
                                       headersonly=not need_body)
-            timestamp = mktime_tz(parsedate_tz(message['date']))
-            realname, _ = parseaddr(message['from'])
             format_args['h'] = message
-            format_args['from'] = realname or message['from']
-            format_args['date'] = datetime.fromtimestamp(timestamp)
-            # TODO: extend format_args, use cgi_escape for args in conf['body']
             if need_body:
                 for part in message.walk():
                     if part.get_content_type() == 'text/plain':
@@ -149,13 +182,19 @@ def notify(ui, account):
                 else:
                     format_args['body'] = 'FIXME'
             try:
-                notify_send(conf['summary'].format(**format_args),
-                            conf['body'].format(**format_args))
+                notify_send(summary_formatter.vformat(conf['summary'], (), format_args),
+                            body_formatter.vformat(conf['body'], (), format_args))
             except (AttributeError, KeyError, TypeError, ValueError) as e:
                 ui.error(e, msg='In notification format specification')
 
 def print_help():
-    print('Notification wrapper -- ' + __copyright__)
+    try:
+        text_width = int(os.environ['COLUMNS'])
+    except (KeyError, ValueError):
+        text_width = 80
+    tw = textwrap.TextWrapper(width=text_width)
+    print('Notification wrapper -- {}\n'.format(__copyright__))
+    print(tw.fill(__doc__))
     print('\nDefault configuration:\n')
     default_config = offlineimap.CustomConfig.CustomConfigParser()
     default_config.add_section(CONFIG_SECTION)
