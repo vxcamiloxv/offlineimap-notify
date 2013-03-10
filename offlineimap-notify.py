@@ -54,6 +54,7 @@ CONFIG_DEFAULTS = OrderedDict((
     ('digest-summary', 'New mail for {account} ({count})'),
     ('digest-body',    '{count} in {folder}'),
     ('notifier',       'notify-send -a {appname} -i {icon} -c {category} {summary} {body}'),
+    ('failstr',        '')
 ))
 
 def send_notification(ui, conf, summary, body):
@@ -127,7 +128,7 @@ class MailNotificationFormatter(string.Formatter):
     # - decode headers?
     # - how are missing headers handled?
 
-    def __init__(self, escape=False):
+    def __init__(self, escape=False, failstr=''):
         self.escape = escape
 
     def format_field(self, value, format_spec):
@@ -135,7 +136,7 @@ class MailNotificationFormatter(string.Formatter):
             result = super(MailNotificationFormatter, self).format_field(value, format_spec)
         except ValueError:
             if value is MailNotificationFormatter._FAILED_DATE_CONVERSION:
-                result = ''  # TODO: add config option to customize this string?
+                result = failstr
             else:
                 raise
         return cgi.escape(result, quote=True) if self.escape else result
@@ -157,17 +158,17 @@ class MailNotificationFormatter(string.Formatter):
         return super(MailNotificationFormatter, self).convert_field(value, conversion)
 
 def notify(ui, account):
-    summary_formatter = MailNotificationFormatter(escape=False)
-    body_formatter = MailNotificationFormatter(escape=True)
     encoding = locale.getpreferredencoding()
     account_name = account.getname().decode(encoding)
-
     conf = CONFIG_DEFAULTS.copy()
     try:
         conf.update(ui.config.items(CONFIG_SECTION))
     except ConfigParser.NoSectionError:
         pass
     notify_send = functools.partial(send_notification, ui, conf)
+    failstr = conf['failstr'].decode(encoding)
+    summary_formatter = MailNotificationFormatter(escape=False, failstr=failstr)
+    body_formatter = MailNotificationFormatter(escape=True, failstr=failstr)
 
     count = 0
     body = []
@@ -196,11 +197,11 @@ def notify(ui, account):
             if need_body:
                 for part in message.walk():
                     if part.get_content_type() == 'text/plain':
-                        format_args['body'] = part  # FIXME: need to .get_payload(decode=True),
-                        # but should study multipart handling more too
+                        format_args['body'] = part  # FIXME: need to .get_payload(decode=True)
+                        # and decode using get_charsets()[0]
                         break
                 else:
-                    format_args['body'] = 'FIXME'  # try HTML body.striptags() or same failstr as for date conversion?
+                    format_args['body'] = failstr
             try:
                 notify_send(summary_formatter.vformat(summary, (), format_args),
                             body_formatter.vformat(body, (), format_args))
