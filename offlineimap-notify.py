@@ -24,8 +24,7 @@ import cgi
 from collections import defaultdict, OrderedDict
 import ConfigParser
 from datetime import datetime
-import email.parser
-import email.utils
+import email
 import functools
 import inspect
 import locale
@@ -126,17 +125,18 @@ class MailNotificationFormatter(string.Formatter):
 
     # TODO:
     # - decode headers?
-    # - how are missing headers handled?
+    # - indexing for missing headers gives None, which might result in formatting errors
 
     def __init__(self, escape=False, failstr=''):
         self.escape = escape
+        self.failstr = failstr
 
     def format_field(self, value, format_spec):
         try:
             result = super(MailNotificationFormatter, self).format_field(value, format_spec)
         except ValueError:
             if value is MailNotificationFormatter._FAILED_DATE_CONVERSION:
-                result = failstr
+                result = self.failstr
             else:
                 raise
         return cgi.escape(result, quote=True) if self.escape else result
@@ -146,7 +146,6 @@ class MailNotificationFormatter(string.Formatter):
             datetuple = email.utils.parsedate_tz(value)
             if datetuple is None:
                 return MailNotificationFormatter._FAILED_DATE_CONVERSION
-            # TODO: skip the mktime_tz step?
             return datetime.fromtimestamp(email.utils.mktime_tz(datetuple))
         elif conversion in 'anN':
             name, address = email.utils.parseaddr(value)
