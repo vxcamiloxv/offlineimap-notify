@@ -28,6 +28,7 @@ import email.parser
 import email.utils
 import functools
 import inspect
+import locale
 import os
 import shlex
 import string
@@ -59,20 +60,21 @@ def send_notification(ui, conf, summary, body):
     appname = 'OfflineIMAP'
     category = 'email.arrived'
     encode = functools.partial(unicode.encode, errors='replace')
-    # TODO: encode icon as well? (find out if conf is decoded already)
+    encoding = locale.getpreferredencoding()
+    icon = conf['icon'].decode(encoding)
     try:
         pynotify.init(appname)
         notification = pynotify.Notification(encode(summary, 'utf-8'),
-                                             encode(body, 'utf-8'), conf['icon'])
+                                             encode(body, 'utf-8'),
+                                             icon.encode('utf-8'))
         notification.set_category(category)
         notification.show()
     except (NameError, RuntimeError):  # no pynotify or no notification service
         try:
-            format_args = {'appname': appname, category=category,
-                           'summary': encode(summary), 'body': encode(body),
-                           'icon': conf['icon']}
-            subprocess.call([word.format(**format_args)
-                             for word in shlex.split(conf['notifier'])])
+            format_args = {'appname': appname, 'category': category,
+                           'summary': summary, 'body': body, 'icon': icon}
+            subprocess.call([encode(word.format(**format_args), encoding)
+                             for word in shlex.split(conf['notifier'].decode(encoding))])
         except ValueError as e:
             ui.error(e, msg='While parsing fallback notifier command')
         except OSError as e:
@@ -157,6 +159,8 @@ class MailNotificationFormatter(string.Formatter):
 def notify(ui, account):
     summary_formatter = MailNotificationFormatter(escape=False)
     body_formatter = MailNotificationFormatter(escape=True)
+    encoding = locale.getpreferredencoding()
+    account_name = account.getname().decode(encoding)
 
     conf = CONFIG_DEFAULTS.copy()
     try:
@@ -169,18 +173,22 @@ def notify(ui, account):
     body = []
     for folder, uids in ui.new_messages[account].iteritems():
         count += len(uids)
-        body.append(body_formatter.format(conf['digest-body'],
-                                          count=len(uids), folder=folder))
+        body.append(body_formatter.format(conf['digest-body'].decode(encoding),
+                                          count=len(uids),
+                                          folder=folder.decode(encoding)))
 
     if count > int(conf['max']):
-        summary = summary_formatter.format(conf['digest-summary'],
-                                           account=account.getname(), count=count)
+        summary = summary_formatter.format(conf['digest-summary'].decode(encoding),
+                                           account=account_name, count=count)
         return notify_send(summary, '\n'.join(body))
 
     need_body = '{body' in conf['body'] or '{body' in conf['summary']
+    summary = conf['summary'].decode(encoding)
+    body = conf['body'].decode(encoding)
     parser = email.parser.Parser()
     for folder, uids in ui.new_messages[account].iteritems():
-        format_args = {'account': account.getname(), 'folder': folder}
+        format_args = {'account': account_name,
+                       'folder': folder.getname().decode(encoding)}
         for uid in uids:
             message = parser.parsestr(folder.getmessage(uid),
                                       headersonly=not need_body)
@@ -194,8 +202,8 @@ def notify(ui, account):
                 else:
                     format_args['body'] = 'FIXME'  # try HTML body.striptags() or same failstr as for date conversion?
             try:
-                notify_send(summary_formatter.vformat(conf['summary'], (), format_args),
-                            body_formatter.vformat(conf['body'], (), format_args))
+                notify_send(summary_formatter.vformat(summary, (), format_args),
+                            body_formatter.vformat(body, (), format_args))
             except (AttributeError, KeyError, TypeError, ValueError) as e:
                 ui.error(e, msg='In notification format specification')
 
