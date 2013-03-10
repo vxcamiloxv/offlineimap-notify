@@ -183,9 +183,9 @@ def notify(ui, account):
                                            account=account_name, count=count)
         return notify_send(summary, '\n'.join(body))
 
-    need_body = '{body' in conf['body'] or '{body' in conf['summary']
     summary = conf['summary'].decode(encoding)
     body = conf['body'].decode(encoding)
+    need_body = '{body' in body or '{body' in summary
     parser = email.parser.Parser()
     for folder, uids in ui.new_messages[account].iteritems():
         format_args = {'account': account_name,
@@ -197,8 +197,9 @@ def notify(ui, account):
             if need_body:
                 for part in message.walk():
                     if part.get_content_type() == 'text/plain':
-                        format_args['body'] = part  # FIXME: need to .get_payload(decode=True)
-                        # and decode using get_charsets()[0]
+                        charset = part.get_content_charset()
+                        payload = part.get_payload(decode=True)
+                        format_args['body'] = payload.decode(charset)
                         break
                 else:
                     format_args['body'] = failstr
