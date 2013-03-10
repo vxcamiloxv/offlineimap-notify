@@ -10,11 +10,13 @@ depends=('offlineimap')
 makedepends=('python2-distribute' 'python2-docutils')
 optdepends=('python2-notify: send notifications via D-Bus')
 #options=(!emptydirs)
-source=("https://bitbucket.org/raymonad/offlineimap-notify/get/v$pkgver.tar.gz")
-md5sums=()
+#source=("https://bitbucket.org/raymonad/offlineimap-notify/get/v$pkgver.tar.gz")
+source=("https://bitbucket.org/raymonad/offlineimap-notify/get/master.tar.gz")
+md5sums=('93cf5b0a17b042646ec3cbb06c684511')
 
 package() {
-  cd "$srcdir/$pkgname-$pkgver"
+  #cd "$srcdir/$pkgname-$pkgver"
+  cd $srcdir/raymonad*
   python setup.py install --root="$pkgdir/" --optimize=1
   rst2man2 offlineimap-notify.rst "$pkgdir"/usr/share/man/man1/offlineimap.1
 }

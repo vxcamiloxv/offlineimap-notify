@@ -5,7 +5,7 @@ with open('offlineimap-notify.rst') as manpage:
 
 setup(name='offlineimap-notify',
       version='0.5.0',
-      author='Raymond Wagenmaker'
+      author='Raymond Wagenmaker',
       author_email='raymondwagenmaker@gmail.com',
       description='Wrapper that adds notification sending to OfflineIMAP',
       long_description=long_description,
