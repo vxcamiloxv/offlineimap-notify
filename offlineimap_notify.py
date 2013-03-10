@@ -1,4 +1,3 @@
-#!/usr/bin/python2
 # Copyright (C) 2013  Raymond Wagenmaker
 #
 # This program is free software: you can redistribute it and/or modify
@@ -124,7 +123,9 @@ class MailNotificationFormatter(string.Formatter):
     _FAILED_DATE_CONVERSION = object()
 
     # TODO:
-    # - decode headers?
+    # - decode headers:
+    #   - l = email.header.decode_header()
+    #   - ' '.join(word.decode(charset, errors='replace') for word, charset in l)
     # - indexing for missing headers gives None, which might result in formatting errors
 
     def __init__(self, escape=False, failstr=''):
@@ -223,7 +224,7 @@ def print_help():
         default_config.set(CONFIG_SECTION, option, value)
     default_config.write(sys.stdout)
 
-if __name__ == '__main__':
+def main():
     for name, cls in offlineimap.ui.UI_LIST.iteritems():
         offlineimap.ui.UI_LIST[name] = add_notifications(cls)
     try:
@@ -233,3 +234,6 @@ if __name__ == '__main__':
             print('\n')
             print_help()
         raise
+
+if __name__ == '__main__':
+    main()
