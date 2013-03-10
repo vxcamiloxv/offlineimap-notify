@@ -16,7 +16,7 @@
 
 """Run OfflineIMAP after adding notification sending to its UIs.
 
-When an account finishes syncing, messages synced to the local repository will
+When an account finishes syncing, messages copied to the local repository will
 be reported using D-Bus (through pynotify) or a fallback notifier command.
 """
 
@@ -52,18 +52,25 @@ CONFIG_DEFAULTS = OrderedDict((
     ('max',            '2'),
     ('digest-summary', 'New mail for {account} ({count})'),
     ('digest-body',    '{count} in {folder}'),
-    ('notifier',       'notify-send -a {appname} -i {icon} {summary} {body}'),
+    ('notifier',       'notify-send -a {appname} -i {icon} -c {category} {summary} {body}'),
 ))
 
 def send_notification(ui, conf, summary, body):
     appname = 'OfflineIMAP'
+    category = 'email.arrived'
+    encode = functools.partial(unicode.encode, errors='replace')
+    # TODO: encode icon as well? (find out if conf is decoded already)
     try:
         pynotify.init(appname)
-        pynotify.Notification(summary, body, conf['icon']).show()
+        notification = pynotify.Notification(encode(summary, 'utf-8'),
+                                             encode(body, 'utf-8'), conf['icon'])
+        notification.set_category(category)
+        notification.show()
     except (NameError, RuntimeError):  # no pynotify or no notification service
         try:
-            format_args = {'appname': appname, 'icon': conf['icon'],
-                           'summary': summary, 'body': body}
+            format_args = {'appname': appname, category=category,
+                           'summary': encode(summary), 'body': encode(body),
+                           'icon': conf['icon']}
             subprocess.call([word.format(**format_args)
                              for word in shlex.split(conf['notifier'])])
         except ValueError as e:
@@ -136,6 +143,7 @@ class MailNotificationFormatter(string.Formatter):
             datetuple = email.utils.parsedate_tz(value)
             if datetuple is None:
                 return MailNotificationFormatter._FAILED_DATE_CONVERSION
+            # TODO: skip the mktime_tz step?
             return datetime.fromtimestamp(email.utils.mktime_tz(datetuple))
         elif conversion in 'anN':
             name, address = email.utils.parseaddr(value)
