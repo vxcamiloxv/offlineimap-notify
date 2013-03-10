@@ -181,7 +181,7 @@ def notify(ui, account):
         count += len(uids)
         body.append(body_formatter.format(conf['digest-body'].decode(encoding),
                                           count=len(uids),
-                                          folder=folder.decode(encoding)))
+                                          folder=folder.getname().decode(encoding)))
 
     if count > int(conf['max']):
         summary = summary_formatter.format(conf['digest-summary'].decode(encoding),
