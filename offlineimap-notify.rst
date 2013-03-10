@@ -64,26 +64,26 @@ failstr
 Format strings
 --------------
 
-The options that specify a format string use Python's ``str.format()`` syntax,
-where ``{field}`` is replaced by the value of ``field``.  The defaults show
-most of the available fields, but for **summary** and **body** you can extract
-more data from the message the notification refers to:
+The options that specify a format string use Python's ``str.format()`` syntax
+[#str-format]_, where ``{field}`` is replaced by the value of ``field``.  The
+defaults show most of the available fields, but for **summary** and **body**
+you can extract more data from the message the notification refers to:
 
-===========  ==========================================================
+===========  ==============================================================
 Field        Value
-===========  ==========================================================
+===========  ==============================================================
 ``account``  name of the account
 ``folder``   name of the folder
-``body``     body of the message (taken from the first text/plain part)
+``body``     body of the message (taken from the first ``text/plain`` part)
 ``h[name]``  value of the header ``name``
-===========  ==========================================================
+===========  ==============================================================
 
 For headers, you can use three custom conversion types: ``d`` to parse a date
-to a ``datetime``, which allows you to use a ``strftime()`` format spec; ``a``
-to get only the address part of a header like ``From``, or the original header
-if parsing fails; ``n`` to get only the name part of such a header, which may
-be an empty string (useful combined with ``a``); or ``N`` to get the name part,
-or the address in case there is no name. Some examples:
+to a ``datetime``, which allows you to use a ``strftime()`` format spec
+[#strftime]_; ``a`` to get only the address part of a header like ``From``, or
+the original header if parsing fails; ``n`` to get only the name part of such a
+header, which may be an empty string (useful combined with ``a``); or ``N`` to
+get the name part, or the address in case there is no name. Some examples:
 
 ``{body:.20}``
     first 20 characters of the message body
@@ -97,3 +97,6 @@ See also
 ========
 
 **offlineimap**\(1)
+
+.. [#str-format] http://docs.python.org/2/library/string.html#formatstrings
+.. [#strftime] http://docs.python.org/2/library/datetime.html#strftime-strptime-behavior
