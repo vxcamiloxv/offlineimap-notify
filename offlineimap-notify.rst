@@ -87,8 +87,10 @@ get the name part, or the address in case there is no name. Some examples:
 
 ``{body:.20}``
     first 20 characters of the message body
+
 ``{h[date]!d:%H:%M}``
     time from the ``Date`` header (hh:mm)
+
 ``<b>{h[from]!n}</b> {h[from]!a}``
     name of the sender (if present) in bold (for notification daemons
     supporting markup) followed by the email address
