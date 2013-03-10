@@ -122,25 +122,9 @@ def add_notifications(ui_cls):
 class MailNotificationFormatter(string.Formatter):
     _FAILED_DATE_CONVERSION = object()
 
-    # TODO:
-    # - decode headers:
-    #   - l = email.header.decode_header()
-    #   - ' '.join(word.decode(charset, errors='replace') for word, charset in l)
-    # - indexing for missing headers gives None, which might result in formatting errors
-
     def __init__(self, escape=False, failstr=''):
         self.escape = escape
         self.failstr = failstr
-
-    def format_field(self, value, format_spec):
-        try:
-            result = super(MailNotificationFormatter, self).format_field(value, format_spec)
-        except ValueError:
-            if value is MailNotificationFormatter._FAILED_DATE_CONVERSION:
-                result = self.failstr
-            else:
-                raise
-        return cgi.escape(result, quote=True) if self.escape else result
 
     def convert_field(self, value, conversion):
         if conversion == 'd':
@@ -156,6 +140,27 @@ class MailNotificationFormatter(string.Formatter):
                 return address
             return name if name or conversion == 'n' else address
         return super(MailNotificationFormatter, self).convert_field(value, conversion)
+
+    def format_field(self, value, format_spec):
+        try:
+            result = super(MailNotificationFormatter, self).format_field(value, format_spec)
+        except ValueError:
+            if value is MailNotificationFormatter._FAILED_DATE_CONVERSION:
+                result = self.failstr
+            else:
+                raise
+        return cgi.escape(result, quote=True) if self.escape else result
+
+class HeaderDecoder(object):
+    def __init__(self, message):
+        self.message = message
+
+    def __getitem__(self, key):
+        header = self.message[key]
+        if header is None:
+            return None
+        return ' '.join(word.decode(charset, errors='replace')
+                        for word, charset in email.header.decode_header(header))
 
 def notify(ui, account):
     encoding = locale.getpreferredencoding()
@@ -193,7 +198,7 @@ def notify(ui, account):
         for uid in uids:
             message = parser.parsestr(folder.getmessage(uid),
                                       headersonly=not need_body)
-            format_args['h'] = message
+            format_args['h'] = HeaderDecoder(message)
             if need_body:
                 for part in message.walk():
                     if part.get_content_type() == 'text/plain':
