@@ -132,7 +132,7 @@ class MailNotificationFormatter(string.Formatter):
             if datetuple is None:
                 return MailNotificationFormatter._FAILED_DATE_CONVERSION
             return datetime.fromtimestamp(email.utils.mktime_tz(datetuple))
-        elif conversion in 'anN':
+        elif conversion in ('a', 'n', 'N'):
             name, address = email.utils.parseaddr(value)
             if not address:
                 address = value
