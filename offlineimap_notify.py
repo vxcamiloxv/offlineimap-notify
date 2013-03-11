@@ -170,12 +170,11 @@ def get_config(ui):
     try:
         for option, value in ui.config.items(CONFIG_SECTION):
             if option == 'max':
-                try:
-                    conf['max'] = int(value)
-                except ValueError:
-                    pass
-            else:
-                conf[option] = value
+                if not value.isdigit():
+                    ui.warn('value "{}" for "max" is not a valid number; '
+                            'ignoring'.format(value))
+                    continue
+            conf[option] = value
     except ConfigParser.NoSectionError:
         pass
     return conf
@@ -197,7 +196,7 @@ def notify(ui, account):
                                           count=len(uids),
                                           folder=folder.getname().decode(encoding)))
 
-    if count > conf['max']:
+    if count > int(conf['max']):
         summary = summary_formatter.format(conf['digest-summary'].decode(encoding),
                                            account=account_name, count=count)
         return notify_send(summary, '\n'.join(body))
