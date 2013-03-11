@@ -88,8 +88,10 @@ get the name part, or the address in case there is no name. Some examples:
 ``{body:.20}``
     first 20 characters of the message body
 
-``{h[date]!d:%H:%M}``
-    time from the ``Date`` header (hh:mm)
+``{h[date]!d:%%H:%%M}``
+    time from the ``Date`` header (hh:mm); remember that a literal '%' has to
+    be encoded as '%%' because OfflineIMAP's configuration also supports
+    interpolation using ``%(field)s`` specifications
 
 ``<b>{h[from]!n}</b> {h[from]!a}``
     name of the sender (if present) in bold (for notification daemons
