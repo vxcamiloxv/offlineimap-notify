@@ -90,9 +90,9 @@ def add_notifications(ui_cls):
 
         @functools.wraps(old)
         def new(*args, **kwargs):
+            old(*args, **kwargs)
             old_args = inspect.getcallargs(old, *args, **kwargs)
             method(**{arg: old_args[arg] for arg in uibase_spec.args})
-            old(*args, **kwargs)
 
         setattr(ui_cls, method.__name__, new)
 
