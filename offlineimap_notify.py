@@ -162,14 +162,25 @@ class HeaderDecoder(object):
         return ' '.join(word.decode(charset, errors='replace')
                         for word, charset in email.header.decode_header(header))
 
+def get_config(ui):
+    conf = CONFIG_DEFAULTS.copy()
+    try:
+        for option, value in ui.config.items(CONFIG_SECTION):
+            if option == 'max':
+                try:
+                    conf['max'] = int(value)
+                except ValueError:
+                    pass
+            else:
+                conf[option] = value
+    except ConfigParser.NoSectionError:
+        pass
+    return conf
+
 def notify(ui, account):
     encoding = locale.getpreferredencoding()
     account_name = account.getname().decode(encoding)
-    conf = CONFIG_DEFAULTS.copy()
-    try:
-        conf.update(ui.config.items(CONFIG_SECTION))
-    except ConfigParser.NoSectionError:
-        pass
+    conf = get_config(ui)
     notify_send = functools.partial(send_notification, ui, conf)
     failstr = conf['failstr'].decode(encoding)
     summary_formatter = MailNotificationFormatter(escape=False, failstr=failstr)
@@ -183,7 +194,7 @@ def notify(ui, account):
                                           count=len(uids),
                                           folder=folder.getname().decode(encoding)))
 
-    if count > int(conf['max']):
+    if count > conf['max']:
         summary = summary_formatter.format(conf['digest-summary'].decode(encoding),
                                            account=account_name, count=count)
         return notify_send(summary, '\n'.join(body))
