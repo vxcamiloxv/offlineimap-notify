@@ -23,7 +23,9 @@ import cgi
 from collections import defaultdict, OrderedDict
 import ConfigParser
 from datetime import datetime
-import email
+import email.header
+import email.parser
+import email.utils
 import functools
 import inspect
 import locale
@@ -160,6 +162,7 @@ class HeaderDecoder(object):
         if header is None:
             return None
         return ' '.join(word.decode(charset, errors='replace')
+                            if charset is not None else word
                         for word, charset in email.header.decode_header(header))
 
 def get_config(ui):
