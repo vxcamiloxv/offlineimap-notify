@@ -143,26 +143,26 @@ class MailNotificationFormatter(string.Formatter):
             if conversion == 'a':
                 return address
             return name if name or conversion == 'n' else address
-        return super(MailNotificationFormatter, self).convert_field(value, conversion)
+        return super(MailNotificationFormatter, self).convert_field(value,
+                                                                    conversion)
 
     def format_field(self, value, format_spec):
-        try:
-            result = super(MailNotificationFormatter, self).format_field(value, format_spec)
-        except ValueError:
-            if value is MailNotificationFormatter._FAILED_DATE_CONVERSION:
-                result = self.failstr
-            else:
-                raise
+        if value is MailNotificationFormatter._FAILED_DATE_CONVERSION:
+            result = self.failstr
+        else:
+            result = super(MailNotificationFormatter, self).format_field(value,
+                                                                         format_spec)
         return cgi.escape(result, quote=True) if self.escape else result
 
 class HeaderDecoder(object):
-    def __init__(self, message):
+    def __init__(self, message, failstr=''):
         self.message = message
+        self.failstr = failstr
 
     def __getitem__(self, key):
         header = self.message[key]
         if header is None:
-            return None
+            return self.failstr
         return ' '.join(word.decode(charset, errors='replace')
                             if charset is not None else word
                         for word, charset in email.header.decode_header(header))
@@ -213,7 +213,7 @@ def notify(ui, account):
         for uid in uids:
             message = parser.parsestr(folder.getmessage(uid),
                                       headersonly=not need_body)
-            format_args['h'] = HeaderDecoder(message)
+            format_args['h'] = HeaderDecoder(message, failstr=failstr)
             if need_body:
                 for part in message.walk():
                     if part.get_content_type() == 'text/plain':
