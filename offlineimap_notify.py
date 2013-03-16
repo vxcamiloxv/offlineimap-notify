@@ -44,6 +44,7 @@ except ImportError:
 
 __author__ = 'Raymond Wagenmaker'
 __copyright__ = 'Copyright 2013 ' + __author__
+__version__ = '0.5.0'
 
 CONFIG_SECTION = 'notifications'
 CONFIG_DEFAULTS = OrderedDict((
@@ -74,8 +75,9 @@ def send_notification(ui, conf, summary, body):
         try:
             format_args = {'appname': appname, 'category': category,
                            'summary': summary, 'body': body, 'icon': icon}
-            subprocess.call([encode(word.format(**format_args), encoding)
-                             for word in shlex.split(conf['notifier'].decode(encoding))])
+            subprocess.call([encode(word.decode(encoding).format(**format_args),
+                                    encoding)
+                             for word in shlex.split(conf['notifier'])])
         except ValueError as e:
             ui.error(e, msg='While parsing fallback notifier command')
         except OSError as e:
@@ -233,7 +235,7 @@ def print_help():
     except (KeyError, ValueError):
         text_width = 80
     tw = textwrap.TextWrapper(width=text_width)
-    print('Notification wrapper -- {}\n'.format(__copyright__))
+    print('Notification wrapper v{} -- {}\n'.format(__version__, __copyright__))
     print(tw.fill(__doc__))
     print('\nDefault configuration:\n')
     default_config = offlineimap.CustomConfig.CustomConfigParser()
