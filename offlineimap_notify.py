@@ -43,7 +43,7 @@ except ImportError:
     pass
 
 __author__ = 'Raymond Wagenmaker'
-__copyright__ = 'Copyright 2013 ' + __author__
+__copyright__ = 'Copyright 2013  ' + __author__
 __version__ = '0.5.0'
 
 CONFIG_SECTION = 'notifications'
@@ -78,13 +78,12 @@ def send_notification(ui, conf, summary, body):
             subprocess.call([encode(word.decode(encoding).format(**format_args),
                                     encoding)
                              for word in shlex.split(conf['notifier'])])
-        except ValueError as e:
-            ui.error(e, msg='While parsing fallback notifier command')
-        except OSError as e:
-            ui.error(e, msg='While calling fallback notifier')
+        except ValueError as exc:
+            ui.error(exc, msg='While parsing fallback notifier command')
+        except OSError as exc:
+            ui.error(exc, msg='While calling fallback notifier')
 
 def add_notifications(ui_cls):
-
     def extension(method):
         old = getattr(ui_cls, method.__name__)
         uibase_spec = inspect.getargspec(getattr(offlineimap.ui.UIBase.UIBase,
@@ -226,8 +225,8 @@ def notify(ui, account):
             try:
                 notify_send(summary_formatter.vformat(summary, (), format_args),
                             body_formatter.vformat(body, (), format_args))
-            except (AttributeError, KeyError, TypeError, ValueError) as e:
-                ui.error(e, msg='In notification format specification')
+            except (AttributeError, KeyError, TypeError, ValueError) as exc:
+                ui.error(exc, msg='In notification format specification')
 
 def print_help():
     try:
