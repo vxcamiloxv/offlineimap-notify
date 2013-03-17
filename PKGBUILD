@@ -13,10 +13,10 @@ optdepends=('python2-notify: send notifications via D-Bus')
 source=("https://bitbucket.org/raymonad/$pkgname/get/v$pkgver.tar.gz")
 
 package() {
-  cd "$srcdir/raymond-$pkgname-$_taghash"
+  cd "$srcdir/raymonad-$pkgname-$_taghash"
   python2 setup.py install --root="$pkgdir/" --optimize=1
-  rst2man2 offlineimap-notify.rst offlineimap.1
-  install -Dm644 offlineimap.1 "$pkgdir"/usr/share/man/man1/offlineimap.1
+  rst2man2 offlineimap-notify.rst offlineimap-notify.1
+  install -Dm644 offlineimap-notify.1 "$pkgdir"/usr/share/man/man1/offlineimap-notify.1
 }
 
 # vim:set ts=2 sw=2 et:
