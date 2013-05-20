@@ -170,11 +170,10 @@ def get_config(ui):
     conf = CONFIG_DEFAULTS.copy()
     try:
         for option, value in ui.config.items(CONFIG_SECTION):
-            if option == 'max':
-                if not value.isdigit():
-                    ui.warn('value "{}" for "max" is not a valid number; '
-                            'ignoring'.format(value))
-                    continue
+            if option == 'max' and not value.isdigit():
+                ui.warn('value "{}" for "max" is not a valid number; '
+                        'ignoring'.format(value))
+                continue
             conf[option] = value
     except ConfigParser.NoSectionError:
         pass
