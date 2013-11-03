@@ -1,9 +1,9 @@
 from setuptools import setup
 
-VERSION = '0.5.0'
+VERSION = '0.5.1'
 
-with open('offlineimap-notify.rst') as manpage:
-    long_description = manpage.read()
+with open('offlineimap-notify.rst') as man_page:
+    long_description = man_page.read()
 
 setup(name='offlineimap-notify',
       version=VERSION,

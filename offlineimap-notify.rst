@@ -7,7 +7,7 @@ wrapper that adds notification sending to OfflineIMAP
 -----------------------------------------------------
 
 :Author: Raymond Wagenmaker <raymondwagenmaker@gmail.com>
-:Date: March 2013
+:Date: November 2013
 :Manual section: 1
 
 Synopsis
@@ -43,6 +43,12 @@ body
 
 icon
     notification icon
+
+urgency
+    notification urgency level (low, normal, critical)
+
+timeout
+    notification expiration timeout (in milliseconds; 0=never, -1=default)
 
 max
     maximum number of notifications; when an account has more new messages,

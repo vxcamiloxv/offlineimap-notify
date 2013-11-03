@@ -29,6 +29,7 @@ import email.utils
 import functools
 import inspect
 import locale
+import operator
 import os
 import shlex
 import string
@@ -44,17 +45,20 @@ except ImportError:
 
 __author__ = 'Raymond Wagenmaker'
 __copyright__ = 'Copyright 2013  ' + __author__
-__version__ = '0.5.0'
+__version__ = '0.5.1'
 
 CONFIG_SECTION = 'notifications'
 CONFIG_DEFAULTS = OrderedDict((
     ('summary',        'New mail for {account} in {folder}'),
     ('body',           'From: {h[from]}\nSubject: {h[subject]}'),
     ('icon',           'mail-unread'),
+    ('urgency',        'normal'),
+    ('timeout',        '-1'),
     ('max',            '2'),
     ('digest-summary', 'New mail for {account} ({count})'),
     ('digest-body',    '{count} in {folder}'),
-    ('notifier',       'notify-send -a {appname} -i {icon} -c {category} {summary} {body}'),
+    ('notifier',       'notify-send -a {appname} -i {icon} -c {category}'
+                       ' -u {urgency} -t {timeout} {summary} {body}'),
     ('failstr',        '')
 ))
 
@@ -62,19 +66,21 @@ def send_notification(ui, conf, summary, body):
     appname = 'OfflineIMAP'
     category = 'email.arrived'
     encode = functools.partial(unicode.encode, errors='replace')
-    encoding = locale.getpreferredencoding()
-    icon = conf['icon'].decode(encoding)
     try:
         pynotify.init(appname)
         notification = pynotify.Notification(encode(summary, 'utf-8'),
                                              encode(body, 'utf-8'),
                                              icon.encode('utf-8'))
         notification.set_category(category)
+        notification.set_urgency(conf['urgency'])
+        notification.set_timeout(conf['timeout'])
         notification.show()
     except (NameError, RuntimeError):  # no pynotify or no notification service
         try:
             format_args = {'appname': appname, 'category': category,
-                           'summary': summary, 'body': body, 'icon': icon}
+                           'summary': summary, 'body': body, 'icon': conf['icon'], 
+                           'urgency': conf['urgency'], 'timeout': conf['timeout']}
+            encoding = locale.getpreferredencoding(False)
             subprocess.call([encode(word.decode(encoding).format(**format_args),
                                     encoding)
                              for word in shlex.split(conf['notifier'])])
@@ -168,42 +174,43 @@ class HeaderDecoder(object):
 
 def get_config(ui):
     conf = CONFIG_DEFAULTS.copy()
+    decode = operator.methodcaller('decode', locale.getpreferredencoding(False))
     try:
-        for option, value in ui.config.items(CONFIG_SECTION):
-            if option == 'max' and not value.isdigit():
-                ui.warn('value "{}" for "max" is not a valid number; '
-                        'ignoring'.format(value))
-                continue
-            conf[option] = value
+        for item in ui.config.items(CONFIG_SECTION):
+            option, value = map(decode, item)
+            if option in ('max', 'timeout'):
+                try:
+                    conf[option] = int(value)
+                except ValueError:
+                    ui.warn('value "{}" for "{}" is not a valid integer; '
+                            'ignoring'.format(value, option))
+            else:
+                conf[option] = value
     except ConfigParser.NoSectionError:
         pass
     return conf
 
 def notify(ui, account):
-    encoding = locale.getpreferredencoding()
+    encoding = locale.getpreferredencoding(False)
     account_name = account.getname().decode(encoding)
     conf = get_config(ui)
     notify_send = functools.partial(send_notification, ui, conf)
-    failstr = conf['failstr'].decode(encoding)
-    summary_formatter = MailNotificationFormatter(escape=False, failstr=failstr)
-    body_formatter = MailNotificationFormatter(escape=True, failstr=failstr)
+    summary_formatter = MailNotificationFormatter(escape=False, failstr=conf['failstr'])
+    body_formatter = MailNotificationFormatter(escape=True, failstr=conf['failstr'])
 
     count = 0
     body = []
     for folder, uids in ui.new_messages[account].iteritems():
         count += len(uids)
-        body.append(body_formatter.format(conf['digest-body'].decode(encoding),
-                                          count=len(uids),
-                                          folder=folder.getname().decode(encoding)))
+        body.append(body_formatter.format(conf['digest-body'], count=len(uids),
+                                          folder=folder.getname()))
 
-    if count > int(conf['max']):
-        summary = summary_formatter.format(conf['digest-summary'].decode(encoding),
-                                           account=account_name, count=count)
+    if count > conf['max']:
+        summary = summary_formatter.format(conf['digest-summary'], count=count,
+                                           account=account_name)
         return notify_send(summary, '\n'.join(body))
 
-    summary = conf['summary'].decode(encoding)
-    body = conf['body'].decode(encoding)
-    need_body = '{body' in body or '{body' in summary
+    need_body = '{body' in conf['body'] or '{body' in conf['summary']
     parser = email.parser.Parser()
     for folder, uids in ui.new_messages[account].iteritems():
         format_args = {'account': account_name,
@@ -211,7 +218,7 @@ def notify(ui, account):
         for uid in uids:
             message = parser.parsestr(folder.getmessage(uid),
                                       headersonly=not need_body)
-            format_args['h'] = HeaderDecoder(message, failstr=failstr)
+            format_args['h'] = HeaderDecoder(message, failstr=conf['failstr'])
             if need_body:
                 for part in message.walk():
                     if part.get_content_type() == 'text/plain':
@@ -220,10 +227,10 @@ def notify(ui, account):
                         format_args['body'] = payload.decode(charset)
                         break
                 else:
-                    format_args['body'] = failstr
+                    format_args['body'] = conf['failstr']
             try:
-                notify_send(summary_formatter.vformat(summary, (), format_args),
-                            body_formatter.vformat(body, (), format_args))
+                notify_send(summary_formatter.vformat(conf['summary'], (), format_args),
+                            body_formatter.vformat(conf['body'], (), format_args))
             except (AttributeError, KeyError, TypeError, ValueError) as exc:
                 ui.error(exc, msg='In notification format specification')
 
@@ -243,6 +250,7 @@ def print_help():
     default_config.write(sys.stdout)
 
 def main():
+    locale.setlocale(locale.LC_ALL, '')
     for name, cls in offlineimap.ui.UI_LIST.iteritems():
         offlineimap.ui.UI_LIST[name] = add_notifications(cls)
     try:
