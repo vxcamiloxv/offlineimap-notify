@@ -8,11 +8,20 @@ using D-Bus (through pynotify) or a fallback notifier command.
 
 ## Quick Start
 
+* Install the package
+```sh
+  pip2 install offlineimap-notify
+```
+
 * Call `offlineimap-notify` instead of `offlineimap`
 
 ```sh
  offlineimap-notify
 ```
+
+## Requirements
+* Python 2.7.x
+* OfflineIMAP
 
 ## Usage
 For configuration options and usage check [Docs](https://framagit.org/distopico/offlineimap-notify/-/blob/master/docs/offlineimap-notify.md)
