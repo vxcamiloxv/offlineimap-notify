@@ -14,7 +14,7 @@ setup(
     description='Wrapper for add notification sending to OfflineIMAP',
     long_description=long_description,
     url='https://framagit.org/distopico/offlineimap-notify',
-    download_url='https://framagit.org/distopico/offlineimap-notify/get/v'+VERSION+'.tar.gz',
+    download_url='https://framagit.org/distopico/offlineimap_notify/-/archive/v' + VERSION + '/offlineimap_notify-v' + VERSION + '.tar.gz',
     py_modules=['offlineimap_notify'],
     classifiers=[
         'Programming Language :: Python :: 2.7'
