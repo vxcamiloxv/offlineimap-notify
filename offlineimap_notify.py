@@ -1,4 +1,6 @@
+#!/usr/bin/python2
 # Copyright (C) 2013  Raymond Wagenmaker
+# Copyright (C) 2019  Distopico <distopico@riseup.net> and contributors
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -68,8 +70,8 @@ def send_notification(ui, conf, summary, body):
     encode = functools.partial(unicode.encode, errors='replace')
     try:
         pynotify.init(appname)
-        notification = pynotify.Notification(encode(summary, 'utf-8'),
-                                             encode(body, 'utf-8'),
+        notification = pynotify.Notification(encode(unicode(summary), 'utf-8'),
+                                             encode(unicode(body), 'utf-8'),
                                              icon.encode('utf-8'))
         notification.set_category(category)
         notification.set_urgency(conf['urgency'])
@@ -78,7 +80,7 @@ def send_notification(ui, conf, summary, body):
     except (NameError, RuntimeError):  # no pynotify or no notification service
         try:
             format_args = {'appname': appname, 'category': category,
-                           'summary': summary, 'body': body, 'icon': conf['icon'], 
+                           'summary': summary, 'body': body, 'icon': conf['icon'],
                            'urgency': conf['urgency'], 'timeout': conf['timeout']}
             encoding = locale.getpreferredencoding(False)
             subprocess.call([encode(word.decode(encoding).format(**format_args),
@@ -124,7 +126,9 @@ def add_notifications(ui_cls):
         account = repository.getaccount()
         if (repository.getname() == self.local_repo_names[account] and
             'S' not in src.getmessageflags(uid)):
-            self.new_messages[account][destfolder].append(uid)
+            content = { 'uid': uid, 'message': src.getmessage(uid) }
+            folder = destfolder.getname()
+            self.new_messages[account][folder].append(content)
 
     return ui_cls
 
@@ -200,10 +204,10 @@ def notify(ui, account):
 
     count = 0
     body = []
-    for folder, uids in ui.new_messages[account].iteritems():
-        count += len(uids)
-        body.append(body_formatter.format(conf['digest-body'], count=len(uids),
-                                          folder=folder.getname()))
+    for folder, contents in ui.new_messages[account].iteritems():
+        count += len(contents)
+        body.append(body_formatter.format(conf['digest-body'], count=len(contents),
+                                          folder=folder))
 
     if count > conf['max']:
         summary = summary_formatter.format(conf['digest-summary'], count=count,
@@ -212,11 +216,11 @@ def notify(ui, account):
 
     need_body = '{body' in conf['body'] or '{body' in conf['summary']
     parser = email.parser.Parser()
-    for folder, uids in ui.new_messages[account].iteritems():
+    for folder, contents in ui.new_messages[account].iteritems():
         format_args = {'account': account_name,
-                       'folder': folder.getname().decode(encoding)}
-        for uid in uids:
-            message = parser.parsestr(folder.getmessage(uid),
+                       'folder': folder.decode(encoding)}
+        for content in contents:
+            message = parser.parsestr(content.get('message'),
                                       headersonly=not need_body)
             format_args['h'] = HeaderDecoder(message, failstr=conf['failstr'])
             if need_body:
