@@ -1,24 +1,28 @@
 from setuptools import setup
+import offlineimap_notify
 
-VERSION = '0.5.1'
+VERSION = offlineimap_notify.__version__
 
-with open('offlineimap-notify.rst') as man_page:
-    long_description = man_page.read()
+with open('README.md') as readme_page:
+    long_description = readme_page.read()
 
-setup(name='offlineimap-notify',
-      version=VERSION,
-      author='Raymond Wagenmaker',
-      author_email='raymondwagenmaker@gmail.com',
-      description='Wrapper that adds notification sending to OfflineIMAP',
-      long_description=long_description,
-      url='https://bitbucket.org/raymonad/offlineimap-notify',
-      download_url='https://bitbucket.org/raymonad/offlineimap-notify/get/v'+VERSION+'.tar.gz',
-      py_modules=['offlineimap_notify'],
-      classifiers=[
-          'License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)'
-          'Programming Language :: Python :: 2.7'
-      ],
-      entry_points={
-          'console_scripts': ['offlineimap-notify = offlineimap_notify:main']
-      },
-      install_requires=['offlineimap'])
+setup(
+    name='offlineimap-notify',
+    version=VERSION,
+    author=offlineimap_notify.__author__,
+    author_email='distopico@riseup.net',
+    description='Wrapper for add notification sending to OfflineIMAP',
+    long_description=long_description,
+    url='https://framagit.org/distopico/offlineimap-notify',
+    download_url='https://framagit.org/distopico/offlineimap-notify/get/v'+VERSION+'.tar.gz',
+    py_modules=['offlineimap_notify'],
+    classifiers=[
+        'Programming Language :: Python :: 2.7'
+        'License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)'
+    ],
+    entry_points={
+        'console_scripts': ['offlineimap-notify = offlineimap_notify:main']
+    },
+    install_requires=['offlineimap'],
+    python_requires='>=2.7',
+)

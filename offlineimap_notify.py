@@ -1,6 +1,6 @@
 #!/usr/bin/python2
-# Copyright (C) 2013  Raymond Wagenmaker
-# Copyright (C) 2019  Distopico <distopico@riseup.net> and contributors
+# Copyright (C) 2013  Raymond Wagenmaker <raymondwagenmaker@gmail.com>
+# Copyright (C) 2020  Distopico <distopico@riseup.net> and contributors
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -45,9 +45,14 @@ try:
 except ImportError:
     pass
 
-__author__ = 'Raymond Wagenmaker'
-__copyright__ = 'Copyright 2013  ' + __author__
-__version__ = '0.5.1'
+__copyright__ = """
+  Copyright 2013, Raymond Wagenmaker <raymondwagenmaker@gmail.com>
+  Copyright 2020, Distopico <distopico@riseup.net>
+"""
+__author__ = 'Raymond Wagenmaker and Distopico'
+__maintainer__ = 'Distopico <distopico@riseup.net>'
+__license__ = "GPLv3"
+__version__ = '0.6'
 
 CONFIG_SECTION = 'notifications'
 CONFIG_DEFAULTS = OrderedDict((

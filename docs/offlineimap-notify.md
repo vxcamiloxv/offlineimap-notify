@@ -1,35 +1,28 @@
-==================
-offlineimap-notify
-==================
+# offlineimap-notify
 
------------------------------------------------------
-wrapper that adds notification sending to OfflineIMAP
------------------------------------------------------
+Wrapper that adds notification sending to OfflineIMAP
 
-:Author: Raymond Wagenmaker <raymondwagenmaker@gmail.com>
-:Date: November 2013
-:Manual section: 1
+---
+Author: Raymond Wagenmaker <raymondwagenmaker@gmail.com>
+Manual section: 1
+---
 
-Synopsis
-========
+## Synopsis
 
 offlineimap-notify [*option*] ...
 
-Description
-===========
+## Description
 
 Run OfflineIMAP after adding notification sending to its UIs.  When an account
 finishes syncing, messages synced to the local repository will be reported
 using D-Bus (through pynotify) or a fallback notifier command.
 
-Options
-=======
+## Options
 
 Options are not touched by the notification wrapper; see **--help** output for
 OfflineIMAP's options.
 
-Configuration
-=============
+## Configuration
 
 The following options can be specified in a **[notifications]** section in
 *~/.offlineimaprc* (and overridden by using the **-k** option on the command
