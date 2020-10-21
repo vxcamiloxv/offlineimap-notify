@@ -52,7 +52,7 @@ __copyright__ = """
 __author__ = 'Raymond Wagenmaker and Distopico'
 __maintainer__ = 'Distopico <distopico@riseup.net>'
 __license__ = "GPLv3"
-__version__ = '0.6'
+__version__ = '0.6.0'
 
 CONFIG_SECTION = 'notifications'
 CONFIG_DEFAULTS = OrderedDict((

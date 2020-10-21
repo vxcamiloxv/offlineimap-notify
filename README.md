@@ -15,7 +15,7 @@ using D-Bus (through pynotify) or a fallback notifier command.
 ```
 
 ## Usage
-For configuration options and usage check [Docs](/docs/offlineimap-notify.md)
+For configuration options and usage check [Docs](https://framagit.org/distopico/offlineimap-notify/-/blob/master/docs/offlineimap-notify.md)
 
 ## License
-[![GNU General Public License version 3](https://www.gnu.org/graphics/gplv3-127x51.png)](/LICENSE)
+[![GNU General Public License version 3](https://www.gnu.org/graphics/gplv3-127x51.png)](https://framagit.org/distopico/offlineimap-notify/-/blob/master/LICENSE)
