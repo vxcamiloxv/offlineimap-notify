@@ -18,7 +18,7 @@
 """Run OfflineIMAP after adding notification sending to its UIs.
 
 When an account finishes syncing, messages copied to the local repository will
-be reported using D-Bus (through pynotify) or a fallback notifier command.
+be reported using D-Bus (through notify2) or a fallback notifier command.
 """
 
 import cgi
@@ -41,7 +41,7 @@ import textwrap
 
 import offlineimap
 try:
-    import pynotify
+    import notify2
 except ImportError:
     pass
 
@@ -74,15 +74,15 @@ def send_notification(ui, conf, summary, body):
     category = 'email.arrived'
     encode = functools.partial(unicode.encode, errors='replace')
     try:
-        pynotify.init(appname)
-        notification = pynotify.Notification(encode(unicode(summary), 'utf-8'),
+        notify2.init(appname)
+        notification = notify2.Notification(encode(unicode(summary), 'utf-8'),
                                              encode(unicode(body), 'utf-8'),
                                              icon.encode('utf-8'))
         notification.set_category(category)
         notification.set_urgency(conf['urgency'])
         notification.set_timeout(conf['timeout'])
         notification.show()
-    except (NameError, RuntimeError):  # no pynotify or no notification service
+    except (NameError, RuntimeError):  # no notify2 or no notification service
         try:
             format_args = {'appname': appname, 'category': category,
                            'summary': summary, 'body': body, 'icon': conf['icon'],
