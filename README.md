@@ -4,7 +4,7 @@ Wrapper for add notification sending to OfflineIMAP.
 
 Run OfflineIMAP after adding notification sending to its UIs.  When an account
 finishes syncing, messages synced to the local repository will be reported
-using D-Bus (through pynotify) or a fallback notifier command.
+using D-Bus (through `notify2`) or a fallback notifier command.
 
 ## Quick Start
 
@@ -22,6 +22,7 @@ using D-Bus (through pynotify) or a fallback notifier command.
 ## Requirements
 * Python 2.7.x
 * OfflineIMAP
+* [notify2](https://pypi.org/project/notify2) (Optional)
 
 ## Usage
 For configuration options and usage check [Docs](https://framagit.org/distopico/offlineimap-notify/-/blob/master/docs/offlineimap-notify.md)
