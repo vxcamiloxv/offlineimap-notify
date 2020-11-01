@@ -1,5 +1,7 @@
 # offlineimap-notify
 
+The default branch is now [main](https://framagit.org/distopico/offlineimap-notify). check it to see the most recent changes
+
 Wrapper for add notification sending to OfflineIMAP.
 
 Run OfflineIMAP after adding notification sending to its UIs.  When an account
